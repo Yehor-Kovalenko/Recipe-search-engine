@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RecipeBot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: url('bg2.jpg');
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    #chat_container {
+      background-color: rgba(255, 255, 255, 0.0);
+      backdrop-filter: blur(6px);
+    }
+    ::-webkit-scrollbar {
+      width: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: 10px;
+      box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(120deg, rgba(255, 255, 0, 0.5), rgba(255, 215, 0, 0.7));
+      border-radius: 10px;
+      box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(120deg, rgba(255, 255, 0, 0.7), rgba(255, 215, 0, 0.9));
+    }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 215, 0, 0.6) transparent;
+    }
+
+    /* Spinner overlay styles */
+    .loader {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: rgba(255, 255, 255, 1);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    #spinnerOverlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      display: none; /* hidden by default */
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body class="bg-gray-700 flex items-center justify-center min-h-screen">
+  <!-- Spinner Overlay -->
+  <div id="spinnerOverlay">
+    <div class="loader"></div>
+  </div>
+
+  <div id="chat_container" class="w-full max-w-xl bg-white shadow-lg rounded-xl flex flex-col h-[600px]">
+
+    <div id="chatWindow" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+    <div id="input_div" class="border-t border-gray-200 p-4 flex gap-2 items-center overflow-x-auto">
+      <input
+        id="userInput"
+        type="text"
+        class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring focus:border-blue-400"
+        placeholder="Type a message or command..."
+      />
+
+      <button id="sendBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full">
+        Send
+      </button>
+
+      <button id="micBtn" class="bg-gray-200 p-3 rounded-full hover:bg-gray-300 transition-all duration-300">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 7a7.001 7.001 0 01-6.93-6H5a9 9 0 0016 0h-1.07A7.001 7.001 0 0112 18zm-1 1h2v3h-2z"/>
+        </svg>
+      </button>
+      <input id="audioInput" type="file" accept=".mp3,.m4a" style="display:none" />
+      <select id="languageSelector" class="shrink-0 text-sm px-3 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring focus:border-blue-400">
+        <option value="en">English</option>
+        <option value="pl">Polish</option>
+        <option value="uk">Ukrainian</option>
+        <option value="be">Belarusian</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="pt">Portuguese</option>
+      </select>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://127.0.0.1:8080';
+    const sendBtn = document.getElementById('sendBtn');
+    const userInput = document.getElementById('userInput');
+    const chatWindow = document.getElementById('chatWindow');
+    const spinnerOverlay = document.getElementById('spinnerOverlay');
+    let lastRecipes = [];
+
+    function addMessage(content, sender = 'user') {
+      const wrapper = document.createElement('div');
+      wrapper.className = `flex items-start space-x-2 mb-4 ${sender==='user'?'justify-end':'justify-start'}`;
+      const avatar = document.createElement('img');
+      avatar.src = sender==='user' ? 'user.png' : 'bot.png';
+      avatar.alt = sender;
+      avatar.className = 'w-8 h-8 rounded-full shadow-md';
+      const bubble = document.createElement('div');
+      bubble.className = 'p-3 rounded-xl max-w-[75%] text-sm';
+      bubble.style.backgroundColor = 'rgba(255,255,255,0.15)';
+      bubble.style.backdropFilter = 'blur(8px)';
+      bubble.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+      bubble.style.border = '1px solid rgba(255,255,255,0.3)';
+      bubble.style.color = sender==='user' ? '#1e3a8a' : '#1f2937';
+      if (typeof content === 'string') bubble.textContent = content;
+      else bubble.appendChild(content);
+      if (sender==='user') {
+        wrapper.appendChild(bubble);
+        wrapper.appendChild(avatar);
+      } else {
+        wrapper.appendChild(avatar);
+        wrapper.appendChild(bubble);
+      }
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function showRecipeList(recipes) {
+      const listWrapper = document.createElement('div');
+      listWrapper.className = 'space-y-2';
+      recipes.forEach((r, idx) => {
+        const item = document.createElement('button');
+        item.textContent = `${idx + 1}. ${r.strMeal}`;
+        item.className = 'text-blue-600 underline block text-left';
+        item.addEventListener('click', () => showRecipeDetail(idx));
+        listWrapper.appendChild(item);
+      });
+      addMessage(listWrapper, 'bot');
+    }
+
+    function showRecipeDetail(index) {
+      const recipe = lastRecipes[index];
+      const container = document.createElement('div');
+
+      // Ingredients section from API-provided array
+      const ingTitle = document.createElement('h4');
+      ingTitle.textContent = 'Ingredients:';
+      ingTitle.className = 'font-semibold mb-1';
+      const ingList = document.createElement('ul');
+      ingList.className = 'list-disc list-inside mb-2 text-sm';
+      if (Array.isArray(recipe.ingredients)) {
+        recipe.ingredients.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.measure.trim()} ${item.ingredient.trim()}`.trim();
+          ingList.appendChild(li);
+        });
+      }
+
+      // Instructions
+      const instrTitle = document.createElement('h4');
+      instrTitle.textContent = 'Recipe:';
+      instrTitle.className = 'font-semibold mb-1';
+      const instrText = document.createElement('p');
+      instrText.textContent = recipe.strInstructions || 'No instructions available.';
+      instrText.className = 'mb-2 text-sm';
+
+      // Photo
+      const photoTitle = document.createElement('h4');
+      photoTitle.textContent = 'Photo:';
+      photoTitle.className = 'font-semibold mb-1';
+      const img = document.createElement('img');
+      img.src = recipe.strMealThumb;
+      img.alt = recipe.strMeal;
+      img.className = 'w-full rounded';
+
+      container.appendChild(ingTitle);
+      container.appendChild(ingList);
+      container.appendChild(instrTitle);
+      container.appendChild(instrText);
+      container.appendChild(photoTitle);
+      container.appendChild(img);
+
+      addMessage(container, 'bot');
+    }
+
+    async function handleCommand(text) {
+      const parts = text.split(' ');
+      const languageSelector = document.getElementById('languageSelector');
+
+      try {
+        const ingredients = parts.slice(0).join(' ').split(',').map(i => i.trim());
+        const selectedLang = languageSelector.value;
+        let translatedIngredients = ingredients;
+        if (selectedLang !== 'en') {
+          const translateRes = await fetch(`${API_BASE}/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ingredients, language: selectedLang })
+          });
+
+          const translateData = await translateRes.json();
+          translatedIngredients = translateData.translated_ingredients;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE}/find_recipes`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ingredients: translatedIngredients, language: selectedLang})
+          });
+          const data = await res.json();
+          lastRecipes = data.recipes || [];
+          if (!lastRecipes.length) return addMessage('No matching recipes found.', 'bot');
+          showRecipeList(lastRecipes);
+        } catch (err) {
+          addMessage('Error: ' + err.message, 'bot');
+        }
+      } catch (err) {
+        addMessage('Error: ' + err.message, 'bot');
+      }
+    }
+
+    sendBtn.addEventListener('click', () => {
+      let text = userInput.value.trim(); if (!text) return;
+      let terms = text.split(',').map(item => item.trim().toLowerCase());
+
+      let simplified = terms.map(term => term.split(' ').slice(-1)[0]);
+      let unique = [...new Set(simplified)];
+
+      text = unique.join(', ');
+
+      addMessage(text, 'user');
+      userInput.value = '';
+
+      handleCommand(text);
+    });
+    userInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
+    micBtn.addEventListener('click', () => { document.getElementById('audioInput').click(); });
+    audioInput.addEventListener('change', async () => {
+      const file = audioInput.files[0]; if (!file) return;
+      spinnerOverlay.style.display = 'flex';
+      const form = new FormData(); form.append('file', file);
+      try {
+        const res = await fetch(`${API_BASE}/transcribe`, {method: 'POST', body: form});
+        const {text, language} = await res.json();
+        userInput.value = text;
+        const languageSelector = document.getElementById('languageSelector');
+        if (languageSelector) {
+          languageSelector.value = language || 'en';
+        }
+      } catch (err) {
+        addMessage('Transcription error: ' + err.message, 'bot');
+      } finally {
+        spinnerOverlay.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
